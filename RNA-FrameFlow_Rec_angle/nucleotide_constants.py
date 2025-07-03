@@ -1,5 +1,5 @@
 # -------------------------------------------------------------------------------------------------------------------------------------
-# Following code curated for (https://github.com/Profluent-Internships/MMDiff):
+# 以下代码整理自 (https://github.com/Profluent-Internships/MMDiff):
 # -------------------------------------------------------------------------------------------------------------------------------------
 
 import collections
@@ -19,7 +19,7 @@ NUM_BACKBONE2_CHI_ANGLES = 3
 NUM_NA_TORSIONS = 10
 
 # Distance from one C4 to next C4 [trans configuration: omega = 180].
-c4_c4 = 6.12
+c4_c4 = 6.12  # 从一个C4到下一个C4的距离 [反式构象: omega = 180]
 
 # Format: The list for each NT type, which contains backbone2-atom1, backbone2-atom2, backbone2-atom3, delta, gamma, beta, alpha1, alpha2, tm, and chi in this order.
 chi_angles_atoms = {
@@ -124,6 +124,8 @@ chi_angles_atoms = {
 # If chi angles given in fixed-length array, this matrix determines how to mask
 # them for each AA type. The order is as per restype_order.
 # In the order of backbone2-atom1, backbone2-atom2, backbone2-atom3, delta, gamma, beta, alpha1, alpha2, tm, and chi
+# 如果chi角以定长数组给出，此矩阵决定每种AA类型如何掩码。顺序见restype_order。
+# 顺序为 backbone2-atom1, backbone2-atom2, backbone2-atom3, delta, gamma, beta, alpha1, alpha2, tm, chi
 chi_angles_mask = {
     "DA": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0],  # A
     "DC": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0],  # C
@@ -138,6 +140,8 @@ chi_angles_mask = {
 # The following chi angles are pi periodic: they can be rotated by a multiple
 # of pi without affecting the structure.
 # Noted that none of the chi angles are pi periodic in RNA
+# 以下chi角是π周期的：它们可以旋转π的倍数而不影响结构。
+# 注意RNA中没有chi角是π周期的
 chi_pi_periodic = {
     "DA": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # A
     "DC": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # C
@@ -162,10 +166,8 @@ chi_pi_periodic = {
 # 8: 'alpha2-group',
 # 9: 'tm-group',  # note: not present in DNA
 # 10: 'chi-group',
-# The atom positions are relative to the axis-end-atom of the corresponding
-# rotation axis. The x-axis is in direction of the rotation axis, and the y-axis
-# is defined such that the dihedral-angle-definiting atom (the last entry in
-# chi_angles_atoms above) is in the xy-plane (with a positive y-coordinate).
+# 原子位置相对于刚体组，由beta, gamma, delta, chi组定义。
+# 这些原子位置是相对于对应旋转轴的轴端原子的。x轴朝向旋转轴，y轴的定义是使得二面角定义原子（上述chi_angles_atoms中最后一个条目）位于xy平面（具有正的y坐标）。
 # format: [atomname, group_idx, rel_position]
 
 rigid_group_atom_positions = {
@@ -354,6 +356,7 @@ rigid_group_atom_positions = {
 }
 
 # A list of atoms (excluding hydrogen) for each AA type. PDB naming convention.
+# 每种AA类型的原子列表（不含氢），PDB命名规范。
 residue_atoms = {
     "A": [
         "C5'",
@@ -540,6 +543,7 @@ residue_atoms = {
 }
 
 # Van der Waals radii [Angstroem] of the atoms (from Wikipedia)
+# 原子的范德华半径 [埃]（来自维基百科）
 van_der_waals_radius = {
     "C": 1.7,
     "N": 1.55,
@@ -562,16 +566,15 @@ def load_stereo_chemical_props() -> (
         Mapping[str, List[BondAngle]],
     ]
 ):
-    """Load stereo_chemical_props.txt into a nice structure.
+    """加载stereo_chemical_props.txt为结构化数据。
 
-    Load literature values for bond lengths and bond angles and translate
-    bond angles into the length of the opposite edge of the triangle
-    ("residue_virtual_bonds").
+    加载文献中的键长和键角，并将键角转换为三角形对边的长度
+    （"residue_virtual_bonds"）。
 
-    Returns:
-      residue_bonds:  dict that maps resname --> list of Bond tuples
-      residue_virtual_bonds: dict that maps resname --> list of Bond tuples
-      residue_bond_angles: dict that maps resname --> list of BondAngle tuples
+    返回:
+      residue_bonds:  字典，resname --> Bond元组列表
+      residue_virtual_bonds: 字典，resname --> Bond元组列表
+      residue_bond_angles: 字典，resname --> BondAngle元组列表
     """
     stereo_chemical_props = resources.read_text(
         "opencomplex.resources", "stereo_chemical_props_RNA.txt"
@@ -614,10 +617,11 @@ def load_stereo_chemical_props() -> (
     residue_bond_angles["X"] = []
 
     def make_bond_key(atom1_name, atom2_name):
-        """Unique key to lookup bonds."""
+        """用于查找键的唯一key。"""
         return "-".join(sorted([atom1_name, atom2_name]))
 
     # Translate bond angles into distances ("virtual bonds").
+    # 将键角转换为距离（"虚拟键"）。
     residue_virtual_bonds = {}
     for resname, bond_angles in residue_bond_angles.items():
         # Create a fast lookup dict for bond lengths.
@@ -951,7 +955,7 @@ restype_order_with_x = {restype: i for i, restype in enumerate(restypes_with_x)}
 
 
 def _make_standard_atom_mask() -> np.ndarray:
-    """Returns [num_res_types, num_atom_types] mask array."""
+    """返回 [num_res_types, num_atom_types] 掩码数组。"""
     # +1 to account for unknown (all 0s).
     mask = np.zeros([restype_num + 1, atom_type_num], dtype=np.int32)
     for restype, restype_letter in enumerate(restypes):
@@ -970,7 +974,7 @@ STANDARD_ATOM_MASK = _make_standard_atom_mask()
 # A one hot representation for the first and second atoms defining the axis
 # of rotation for each chi-angle in each residue.
 def chi_angle_atom(atom_index: int) -> np.ndarray:
-    """Define chi-angle rigid groups via one-hot representations."""
+    """通过one-hot表示定义chi角刚体组。"""
     chi_angles_index = {}
     one_hots = []
 
@@ -993,7 +997,7 @@ def chi_angle_atom(atom_index: int) -> np.ndarray:
 
 
 def _make_rigid_transformation_4x4(ex, ey, translation):
-    """Create a rigid 4x4 transformation matrix from two axes and transl."""
+    """从两个轴和位移创建刚性4x4变换矩阵。"""
     # Normalize ex.
     ex_normalized = ex / np.linalg.norm(ex)
 
@@ -1030,7 +1034,7 @@ nttype_rigid_group_default_frame = np.zeros([9, 11, 4, 4], dtype=np.float32)
 
 
 def _make_rigid_group_constants():
-    """Fill the arrays above."""
+    """填充上面的数组。"""
     for nttype, nttype_letter in enumerate(restypes):
         # resname = restype_1to3[restype_letter]
         ntname = nttype_letter
@@ -1169,7 +1173,7 @@ _make_rigid_group_constants()
 
 
 def make_compact_atom_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor=15):
-    """Compute upper and lower bounds for bonds to assess violations."""
+    """计算键的上下界以评估冲突。"""
     restype_compact_atom_bond_lower_bound = np.zeros([9, 23, 23], np.float32)
     restype_compact_atom_bond_upper_bound = np.zeros([9, 23, 23], np.float32)
     restype_compact_atom_bond_stddev = np.zeros([9, 23, 23], np.float32)

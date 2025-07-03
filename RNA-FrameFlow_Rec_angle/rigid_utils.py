@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------------------------------------------------------------------------
-# Following code adapted from se3_diffusion (https://github.com/jasonkyuyim/se3_diffusion):
+# 以下代码改编自 se3_diffusion (https://github.com/jasonkyuyim/se3_diffusion):
 # -------------------------------------------------------------------------------------------------------------------------------------
-"""Versions of OpenFold's vector update functions patched to support masking."""
+"""OpenFold的向量更新函数的变体，支持掩码。"""
 
 import numpy as np
 import torch
@@ -16,14 +16,13 @@ COORDINATES_TENSOR_TYPE = Float[torch.Tensor, "... num_nodes 3"]
 
 
 def rot_matmul(a: ROTATION_TENSOR_TYPE, b: ROTATION_TENSOR_TYPE) -> ROTATION_TENSOR_TYPE:
-    """Performs matrix multiplication of two rotation matrix tensors. Written out by hand to avoid
-    AMP downcasting.
+    """对两个旋转矩阵张量进行矩阵乘法。手写实现以避免AMP降精度。
 
-    Args:
-        a: [*, 3, 3] left multiplicand
-        b: [*, 3, 3] right multiplicand
-    Returns:
-        The product ab
+    参数:
+        a: [*, 3, 3] 左乘数
+        b: [*, 3, 3] 右乘数
+    返回:
+        ab的乘积
     """
     row_1 = torch.stack(
         [
@@ -72,14 +71,13 @@ def rot_matmul(a: ROTATION_TENSOR_TYPE, b: ROTATION_TENSOR_TYPE) -> ROTATION_TEN
 
 
 def rot_vec_mul(r: ROTATION_TENSOR_TYPE, t: COORDINATES_TENSOR_TYPE) -> COORDINATES_TENSOR_TYPE:
-    """Applies a rotation to a vector. Written out by hand to avoid transfer to avoid AMP
-    downcasting.
+    """对向量应用旋转。手写实现以避免AMP降精度。
 
-    Args:
-        r: [*, 3, 3] rotation matrices
-        t: [*, 3] coordinate tensors
-    Returns:
-        [*, 3] rotated coordinates
+    参数:
+        r: [*, 3, 3] 旋转矩阵
+        t: [*, 3] 坐标张量
+    返回:
+        [*, 3] 旋转后的坐标
     """
     x = t[..., 0]
     y = t[..., 1]
@@ -100,6 +98,7 @@ def identity_rot_mats(
     device: Optional[torch.device] = None,
     requires_grad: bool = True,
 ) -> ROTATION_TENSOR_TYPE:
+    """生成单位旋转矩阵。"""
     rots = torch.eye(3, dtype=dtype, device=device, requires_grad=requires_grad)
     rots = rots.view(*((1,) * len(batch_dims)), 3, 3)
     rots = rots.expand(*batch_dims, -1, -1)
@@ -113,6 +112,7 @@ def identity_trans(
     device: Optional[torch.device] = None,
     requires_grad: bool = True,
 ) -> COORDINATES_TENSOR_TYPE:
+    """生成零平移向量。"""
     trans = torch.zeros((*batch_dims, 3), dtype=dtype, device=device, requires_grad=requires_grad)
     return trans
 
@@ -123,6 +123,7 @@ def identity_quats(
     device: Optional[torch.device] = None,
     requires_grad: bool = True,
 ) -> QUATERNION_TENSOR_TYPE:
+    """生成单位四元数。"""
     quat = torch.zeros((*batch_dims, 4), dtype=dtype, device=device, requires_grad=requires_grad)
 
     with torch.no_grad():
@@ -159,12 +160,12 @@ _QTR_MAT[..., 2, 2] = _to_mat([("aa", 1), ("bb", -1), ("cc", -1), ("dd", 1)])
 
 
 def quat_to_rot(quat: QUATERNION_TENSOR_TYPE) -> ROTATION_TENSOR_TYPE:
-    """Converts a quaternion to a rotation matrix.
+    """将四元数转换为旋转矩阵。
 
-    Args:
-        quat: [*, 4] quaternions
-    Returns:
-        [*, 3, 3] rotation matrices
+    参数:
+        quat: [*, 4] 四元数
+    返回:
+        [*, 3, 3] 旋转矩阵
     """
     # [*, 4, 4]
     quat = quat[..., None] * quat[..., None, :]
@@ -181,6 +182,7 @@ def quat_to_rot(quat: QUATERNION_TENSOR_TYPE) -> ROTATION_TENSOR_TYPE:
 
 
 def rot_to_quat(rot: ROTATION_TENSOR_TYPE) -> QUATERNION_TENSOR_TYPE:
+    """将旋转矩阵转换为四元数。"""
     if rot.shape[-2:] != (3, 3):
         raise ValueError("Input rotation is incorrectly shaped")
 
@@ -235,7 +237,7 @@ _QUAT_MULTIPLY_BY_VEC = _QUAT_MULTIPLY[:, 1:, :]
 def quat_multiply(
     quat1: QUATERNION_TENSOR_TYPE, quat2: QUATERNION_TENSOR_TYPE
 ) -> QUATERNION_TENSOR_TYPE:
-    """Multiply a quaternion by another quaternion."""
+    """四元数相乘。"""
     mat = quat1.new_tensor(_QUAT_MULTIPLY)
     reshaped_mat = mat.view((1,) * len(quat1.shape[:-1]) + mat.shape)
     return torch.sum(
@@ -246,7 +248,7 @@ def quat_multiply(
 def quat_multiply_by_vec(
     quat: QUATERNION_TENSOR_TYPE, vec: COORDINATES_TENSOR_TYPE
 ) -> QUATERNION_TENSOR_TYPE:
-    """Multiply a quaternion by a pure-vector quaternion."""
+    """四元数与纯向量四元数相乘。"""
     mat = quat.new_tensor(_QUAT_MULTIPLY_BY_VEC)
     reshaped_mat = mat.view((1,) * len(quat.shape[:-1]) + mat.shape)
     return torch.sum(
@@ -255,12 +257,14 @@ def quat_multiply_by_vec(
 
 
 def invert_rot_mat(rot_mat: ROTATION_TENSOR_TYPE) -> ROTATION_TENSOR_TYPE:
+    """旋转矩阵求逆。"""
     return rot_mat.transpose(-1, -2)
 
 
 def invert_quat(
     quat: QUATERNION_TENSOR_TYPE, mask: Optional[NODE_MASK_TENSOR_TYPE] = None
 ) -> QUATERNION_TENSOR_TYPE:
+    """四元数求逆。"""
     quat_prime = quat.clone()
     quat_prime[..., 1:] *= -1
     if mask is not None:
@@ -273,13 +277,10 @@ def invert_quat(
 
 
 class Rotation:
-    """A 3D rotation.
+    """三维旋转。
 
-    Depending on how the object is initialized, the rotation is represented by either a rotation
-    matrix or a quaternion, though both formats are made available by helper functions. To simplify
-    gradient computation, the underlying format of the rotation cannot be changed in-place. Like
-    Rigid, the class is designed to mimic the behavior of a torch Tensor, almost as if each
-    Rotation object were a tensor of rotations, in one format or another.
+    根据初始化方式，旋转可以用旋转矩阵或四元数表示，辅助函数可互转。
+    为简化梯度计算，底层格式不可原地更改。设计为类似torch Tensor的行为。
     """
 
     def __init__(
@@ -291,18 +292,14 @@ class Rotation:
     ):
         """
         初始化Rotation对象，表示3D旋转
-        
-        Args:
-            rot_mats:
-                旋转矩阵张量，形状为[*, 3, 3]。与quats参数互斥，只能指定其中一个
-            quats:
-                四元数张量，形状为[*, 4]。与rot_mats参数互斥，只能指定其中一个。
-                如果normalize_quats不为True，则必须是单位四元数
-            quats_mask:
-                四元数掩码张量，形状为[*]。当指定quats且normalize_quats为True时，
-                用于选择哪些四元数元素进行归一化
-            normalize_quats:
-                当指定quats时，是否对四元数进行归一化处理
+
+        参数:
+            rot_mats: 旋转矩阵张量，形状为[*, 3, 3]。与quats参数互斥，只能指定其中一个
+            quats: 四元数张量，形状为[*, 4]。与rot_mats参数互斥，只能指定其中一个。
+                   如果normalize_quats不为True，则必须是单位四元数
+            quats_mask: 四元数掩码张量，形状为[*]。当指定quats且normalize_quats为True时，
+                        用于选择哪些四元数元素进行归一化
+            normalize_quats: 当指定quats时，是否对四元数进行归一化处理
         """
         # 验证输入参数：必须且只能指定一个旋转表示（旋转矩阵或四元数）
         if (rot_mats is None and quats is None) or (rot_mats is not None and quats is not None):
@@ -347,24 +344,16 @@ class Rotation:
         requires_grad: bool = True,
         fmt: str = "quat",
     ):
-        """Returns an identity Rotation.
+        """返回单位旋转。
 
-        Args:
-            shape:
-                The "shape" of the resulting Rotation object. See documentation
-                for the shape property
-            dtype:
-                The torch dtype for the rotation
-            device:
-                The torch device for the new rotation
-            requires_grad:
-                Whether the underlying tensors in the new rotation object
-                should require gradient computation
-            fmt:
-                One of "quat" or "rot_mat". Determines the underlying format
-                of the new object's rotation
-        Returns:
-            A new identity rotation
+        参数:
+            shape: 结果Rotation对象的“形状”
+            dtype: 旋转的torch dtype
+            device: 新旋转的torch设备
+            requires_grad: 是否需要梯度
+            fmt: "quat"或"rot_mat"，决定底层格式
+        返回:
+            新的单位旋转
         """
         if fmt == "rot_mat":
             rot_mats = identity_rot_mats(
@@ -383,14 +372,12 @@ class Rotation:
     # Magic methods
 
     def __getitem__(self, index: Any):
-        """Allows torch-style indexing over the virtual shape of the rotation object. See
-        documentation for the shape property.
+        """支持torch风格的索引。见shape属性文档。
 
-        Args:
-            index:
-                A torch index. E.g. (1, 3, 2), or (slice(None,))
-        Returns:
-            The indexed rotation
+        参数:
+            index: torch索引
+        返回:
+            索引后的旋转
         """
         if type(index) != tuple:
             index = (index,)
@@ -405,14 +392,12 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def __mul__(self, right: torch.Tensor) -> "Rotation":
-        """Pointwise left multiplication of the rotation with a tensor. Can be used to e.g., mask
-        the Rotation.
+        """逐点左乘，可用于掩码Rotation。
 
-        Args:
-            right:
-                The tensor multiplicand
-        Returns:
-            The product
+        参数:
+            right: 张量乘数
+        返回:
+            乘积
         """
         if not (isinstance(right, torch.Tensor)):
             raise TypeError("The other multiplicand must be a Tensor")
@@ -427,13 +412,12 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def __rmul__(self, left: torch.Tensor) -> "Rotation":
-        """Reverse pointwise multiplication of the rotation with a tensor.
+        """逐点右乘。
 
-        Args:
-            left:
-                The left multiplicand
-        Returns:
-            The product
+        参数:
+            left: 左乘数
+        返回:
+            乘积
         """
         return self.__mul__(left)
 
@@ -441,12 +425,10 @@ class Rotation:
 
     @property
     def shape(self) -> torch.Size:
-        """Returns the virtual shape of the rotation object. This shape is defined as the batch
-        dimensions of the underlying rotation matrix or quaternion. If the Rotation was initialized
-        with a [10, 3, 3] rotation matrix tensor, for example, the resulting shape would be [10].
+        """返回旋转对象的虚拟形状。即底层旋转矩阵或四元数的批次维度。
 
-        Returns:
-            The virtual shape of the rotation object
+        返回:
+            虚拟形状
         """
         s = None
         if self._quats is not None:
@@ -458,11 +440,7 @@ class Rotation:
 
     @property
     def dtype(self) -> torch.dtype:
-        """Returns the dtype of the underlying rotation.
-
-        Returns:
-            The dtype of the underlying rotation
-        """
+        """返回底层旋转的dtype。"""
         if self._rot_mats is not None:
             return self._rot_mats.dtype
         elif self._quats is not None:
@@ -472,11 +450,7 @@ class Rotation:
 
     @property
     def device(self) -> torch.device:
-        """The device of the underlying rotation.
-
-        Returns:
-            The device of the underlying rotation
-        """
+        """返回底层旋转的设备。"""
         if self._rot_mats is not None:
             return self._rot_mats.device
         elif self._quats is not None:
@@ -486,11 +460,7 @@ class Rotation:
 
     @property
     def requires_grad(self) -> bool:
-        """Returns the requires_grad property of the underlying rotation.
-
-        Returns:
-            The requires_grad property of the underlying tensor
-        """
+        """返回底层旋转的requires_grad属性。"""
         if self._rot_mats is not None:
             return self._rot_mats.requires_grad
         elif self._quats is not None:
@@ -502,11 +472,7 @@ class Rotation:
         self,
         new_rots_shape: Optional[torch.Size] = None,
     ) -> "Rotation":
-        """Returns the corresponding reshaped rotation.
-
-        Returns:
-            The reshaped rotation
-        """
+        """返回重塑后的旋转。"""
         if self._quats is not None:
             new_rots = self._quats.reshape(new_rots_shape) if new_rots_shape else self._quats
             new_rot = Rotation(quats=new_rots, normalize_quats=False)
@@ -517,11 +483,7 @@ class Rotation:
         return new_rot
 
     def get_rot_mats(self) -> ROTATION_TENSOR_TYPE:
-        """Returns the underlying rotation as a rotation matrix tensor.
-
-        Returns:
-            The rotation as a rotation matrix tensor
-        """
+        """以旋转矩阵张量形式返回底层旋转。"""
         rot_mats = self._rot_mats
         if rot_mats is None:
             if self._quats is None:
@@ -532,14 +494,7 @@ class Rotation:
         return rot_mats
 
     def get_quats(self) -> QUATERNION_TENSOR_TYPE:
-        """Returns the underlying rotation as a quaternion tensor.
-
-        Depending on whether the Rotation was initialized with a
-        quaternion, this function may call torch.linalg.eigh.
-
-        Returns:
-            The rotation as a quaternion tensor.
-        """
+        """以四元数张量形式返回底层旋转。"""
         quats = self._quats
         if quats is None:
             if self._rot_mats is None:
@@ -550,11 +505,7 @@ class Rotation:
         return quats
 
     def get_cur_rot(self) -> Union[QUATERNION_TENSOR_TYPE, ROTATION_TENSOR_TYPE]:
-        """Return the underlying rotation in its current form.
-
-        Returns:
-            The stored rotation
-        """
+        """返回当前存储的旋转。"""
         if self._rot_mats is not None:
             return self._rot_mats
         elif self._quats is not None:
@@ -563,13 +514,11 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def get_rotvec(self, eps: float = 1e-6) -> torch.Tensor:
-        """Return the underlying axis-angle rotation vector.
+        """返回轴-角旋转向量。
 
-        Follow's scipy's implementation:
-        https://github.com/scipy/scipy/blob/HEAD/scipy/spatial/transform/_rotation.pyx#L1385-L1402
-
-        Returns:
-            The stored rotation as a axis-angle vector.
+        参考scipy实现。
+        返回:
+            轴-角向量
         """
         quat = self.get_quats()
         # w > 0 to ensure 0 <= angle <= pi
@@ -595,20 +544,14 @@ class Rotation:
         normalize_quats: bool = True,
         update_mask: Optional[UPDATE_NODE_MASK_TENSOR_TYPE] = None,
     ) -> "Rotation":
-        """Returns a new quaternion Rotation after updating the current object's underlying
-        rotation with a quaternion update, formatted as a [*, 3] tensor whose final three columns
-        represent x, y, z such that (1, x, y, z) is the desired (not necessarily unit) quaternion
-        update.
+        """用四元数更新向量更新当前旋转，返回新Rotation。
 
-        Args:
-            q_update_vec:
-                A [*, 3] quaternion update tensor
-            normalize_quats:
-                Whether to normalize the output quaternion
-            update_mask:
-                An optional [*, 1] node mask indicating whether to update a node's geometry.
-        Returns:
-            An updated Rotation
+        参数:
+            q_update_vec: [*, 3] 四元数更新张量
+            normalize_quats: 是否归一化输出四元数
+            update_mask: 可选掩码
+        返回:
+            更新后的Rotation
         """
         quats = self.get_quats()
         quat_update = quat_multiply_by_vec(quats, q_update_vec)
@@ -623,13 +566,12 @@ class Rotation:
         )
 
     def compose_r(self, r: "Rotation") -> "Rotation":
-        """Compose the rotation matrices of the current Rotation object with those of another.
+        """将当前Rotation与另一个Rotation的旋转矩阵复合。
 
-        Args:
-            r:
-                An update rotation object
-        Returns:
-            An updated rotation object
+        参数:
+            r: 更新旋转对象
+        返回:
+            更新后的旋转对象
         """
         r1 = self.get_rot_mats()
         r2 = r.get_rot_mats()
@@ -637,16 +579,12 @@ class Rotation:
         return Rotation(rot_mats=new_rot_mats, quats=None)
 
     def compose_q(self, r: "Rotation", normalize_quats: bool = True) -> "Rotation":
-        """Compose the quaternions of the current Rotation object with those of another.
+        """将当前Rotation与另一个Rotation的四元数复合。
 
-        Depending on whether either Rotation was initialized with
-        quaternions, this function may call torch.linalg.eigh.
-
-        Args:
-            r:
-                An update rotation object
-        Returns:
-            An updated rotation object
+        参数:
+            r: 更新旋转对象
+        返回:
+            更新后的旋转对象
         """
         q1 = self.get_quats()
         q2 = r.get_quats()
@@ -654,38 +592,35 @@ class Rotation:
         return Rotation(rot_mats=None, quats=new_quats, normalize_quats=normalize_quats)
 
     def apply(self, pts: COORDINATES_TENSOR_TYPE) -> COORDINATES_TENSOR_TYPE:
-        """Apply the current Rotation as a rotation matrix to a set of 3D coordinates.
+        """将当前Rotation作为旋转矩阵应用于一组3D坐标。
 
-        Args:
-            pts:
-                A [*, 3] set of points
-        Returns:
-            [*, 3] rotated points
+        参数:
+            pts: [*, 3] 坐标点
+        返回:
+            旋转后的点
         """
         rot_mats = self.get_rot_mats()
         return rot_vec_mul(rot_mats, pts)
 
     def invert_apply(self, pts: COORDINATES_TENSOR_TYPE) -> COORDINATES_TENSOR_TYPE:
-        """The inverse of the apply() method.
+        """apply()方法的逆操作。
 
-        Args:
-            pts:
-                A [*, 3] set of points
-        Returns:
-            [*, 3] inverse-rotated points
+        参数:
+            pts: [*, 3] 坐标点
+        返回:
+            逆旋转后的点
         """
         rot_mats = self.get_rot_mats()
         inv_rot_mats = invert_rot_mat(rot_mats)
         return rot_vec_mul(inv_rot_mats, pts)
 
     def invert(self, mask: Optional[NODE_MASK_TENSOR_TYPE] = None) -> "Rotation":
-        """Returns the inverse of the current Rotation.
+        """返回当前Rotation的逆。
 
-        Args:
-            mask:
-                An optional node mask indicating whether to invert a node's geometry.
-        Returns:
-            The inverse of the current Rotation
+        参数:
+            mask: 可选掩码
+        返回:
+            逆旋转
         """
         if self._rot_mats is not None:
             return Rotation(rot_mats=invert_rot_mat(self._rot_mats), quats=None)
@@ -702,13 +637,12 @@ class Rotation:
     # "Tensor" stuff
 
     def unsqueeze(self, dim: int) -> "Rotation":
-        """Analogous to torch.unsqueeze. The dimension is relative to the shape of the Rotation
-        object.
+        """类似torch.unsqueeze。维度相对于Rotation对象的shape。
 
-        Args:
-            dim: A positive or negative dimension index.
-        Returns:
-            The unsqueezed Rotation.
+        参数:
+            dim: 维度索引
+        返回:
+            扩展后的Rotation
         """
         if dim >= len(self.shape):
             raise ValueError("Invalid dimension")
@@ -724,19 +658,15 @@ class Rotation:
 
     @staticmethod
     def cat(rs, dim: int) -> "Rotation":
-        """Concatenates rotations along one of the batch dimensions. Analogous to torch.cat().
+        """沿批次维度拼接旋转。类似torch.cat()。
 
-        Note that the output of this operation is always a rotation matrix,
-        regardless of the format of input rotations.
+        注意输出总是旋转矩阵格式。
 
-        Args:
-            rs:
-                A list of rotation objects
-            dim:
-                The dimension along which the rotations should be
-                concatenated
-        Returns:
-            A concatenated Rotation object in rotation matrix format
+        参数:
+            rs: 旋转对象列表
+            dim: 拼接维度
+        返回:
+            拼接后的Rotation
         """
         rot_mats = [r.get_rot_mats() for r in rs]
         rot_mats = torch.cat(rot_mats, dim=dim if dim >= 0 else dim - 2)
@@ -744,14 +674,12 @@ class Rotation:
         return Rotation(rot_mats=rot_mats, quats=None)
 
     def map_tensor_fn(self, fn: Callable) -> "Rotation":
-        """Apply a Tensor -> Tensor function to underlying rotation tensors, mapping over the
-        rotation dimension(s). Can be used e.g. to sum out a one-hot batch dimension.
+        """对底层旋转张量应用Tensor->Tensor函数，映射旋转维度。
 
-        Args:
-            fn:
-                A Tensor -> Tensor function to be mapped over the Rotation
-        Returns:
-            The transformed Rotation object
+        参数:
+            fn: Tensor->Tensor函数
+        返回:
+            变换后的Rotation
         """
         if self._rot_mats is not None:
             rot_mats = self._rot_mats.view(self._rot_mats.shape[:-2] + (9,))
@@ -765,10 +693,10 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def cuda(self) -> "Rotation":
-        """Analogous to the cuda() method of torch Tensors.
+        """类似torch Tensor的cuda()方法。
 
-        Returns:
-            A copy of the Rotation in CUDA memory
+        返回:
+            CUDA内存中的Rotation副本
         """
         if self._rot_mats is not None:
             return Rotation(rot_mats=self._rot_mats.cuda(), quats=None)
@@ -778,15 +706,13 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def to(self, device: Optional[torch.device], dtype: Optional[torch.dtype]) -> "Rotation":
-        """Analogous to the to() method of torch Tensors.
+        """类似torch Tensor的to()方法。
 
-        Args:
-            device:
-                A torch device
-            dtype:
-                A torch dtype
-        Returns:
-            A copy of the Rotation using the new device and dtype
+        参数:
+            device: torch设备
+            dtype: torch dtype
+        返回:
+            使用新设备和dtype的Rotation副本
         """
         if self._rot_mats is not None:
             return Rotation(
@@ -803,12 +729,10 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def detach(self) -> "Rotation":
-        """Returns a copy of the Rotation whose underlying Tensor has been detached from its torch
-        graph.
+        """返回已从torch计算图分离的Rotation副本。
 
-        Returns:
-            A copy of the Rotation whose underlying Tensor has been detached
-            from its torch graph
+        返回:
+            已分离的Rotation副本
         """
         if self._rot_mats is not None:
             return Rotation(rot_mats=self._rot_mats.detach(), quats=None)
@@ -835,9 +759,9 @@ class Rigid:
         trans: Optional[COORDINATES_TENSOR_TYPE],
     ):
         """
-        Args:
-            rots: A [*, 3, 3] rotation tensor
-            trans: A corresponding [*, 3] translation tensor
+        参数:
+            rots: [*, 3, 3] 旋转张量
+            trans: [*, 3] 平移张量
         """
         # (we need device, dtype, etc. from at least one input)
 
@@ -887,19 +811,15 @@ class Rigid:
         requires_grad: bool = True,
         fmt: str = "quat",
     ) -> "Rigid":
-        """Constructs an identity transformation.
+        """构造单位变换。
 
-        Args:
-            shape:
-                The desired shape
-            dtype:
-                The dtype of both internal tensors
-            device:
-                The device of both internal tensors
-            requires_grad:
-                Whether grad should be enabled for the internal tensors
-        Returns:
-            The identity transformation
+        参数:
+            shape: 期望形状
+            dtype: 内部张量的dtype
+            device: 内部张量的设备
+            requires_grad: 是否启用梯度
+        返回:
+            单位变换
         """
         return Rigid(
             Rotation.identity(shape, dtype, device, requires_grad, fmt=fmt),
@@ -907,10 +827,9 @@ class Rigid:
         )
 
     def __getitem__(self, index: Any) -> "Rigid":
-        """Indexes the affine transformation with PyTorch-style indices. The index is applied to
-        the shared dimensions of both the rotation and the translation.
+        """用PyTorch风格索引刚体变换。索引应用于旋转和平移的共享维度。
 
-        E.g.::
+        例如::
 
             r = Rotation(rot_mats=torch.rand(10, 10, 3, 3), quats=None)
             t = Rigid(r, torch.rand(10, 10, 3))
@@ -919,11 +838,10 @@ class Rigid:
             assert(indexed.get_rots().shape == (2,))
             assert(indexed.get_trans().shape == (2, 3))
 
-        Args:
-            index: A standard torch tensor index. E.g. 8, (10, None, 3),
-            or (3, slice(0, 1, None))
-        Returns:
-            The indexed tensor
+        参数:
+            index: 标准torch张量索引
+        返回:
+            索引后的张量
         """
         if type(index) != tuple:
             index = (index,)
@@ -934,14 +852,12 @@ class Rigid:
         )
 
     def __mul__(self, right: torch.Tensor) -> "Rigid":
-        """Pointwise left multiplication of the transformation with a tensor. Can be used to e.g.
-        mask the Rigid.
+        """逐点左乘，可用于掩码Rigid。
 
-        Args:
-            right:
-                The tensor multiplicand
-        Returns:
-            The product
+        参数:
+            right: 张量乘数
+        返回:
+            乘积
         """
         if not (isinstance(right, torch.Tensor)):
             raise TypeError("The other multiplicand must be a Tensor")
@@ -952,32 +868,31 @@ class Rigid:
         return Rigid(new_rots, new_trans)
 
     def __rmul__(self, left: torch.Tensor) -> "Rigid":
-        """Reverse pointwise multiplication of the transformation with a tensor.
+        """逐点右乘。
 
-        Args:
-            left:
-                The left multiplicand
-        Returns:
-            The product
+        参数:
+            left: 左乘数
+        返回:
+            乘积
         """
         return self.__mul__(left)
 
     @property
     def shape(self) -> torch.Size:
-        """Returns the shape of the shared dimensions of the rotation and the translation.
+        """返回旋转和平移的共享维度的形状。
 
-        Returns:
-            The shape of the transformation
+        返回:
+            变换的形状
         """
         s = self._trans.shape[:-1]
         return s
 
     @property
     def device(self) -> torch.device:
-        """Returns the device on which the Rigid's tensors are located.
+        """返回Rigid张量所在的设备。
 
-        Returns:
-            The device on which the Rigid's tensors are located
+        返回:
+            张量所在的设备
         """
         return self._trans.device
 
@@ -986,10 +901,10 @@ class Rigid:
         new_rots_shape: Optional[torch.Size] = None,
         new_trans_shape: Optional[torch.Size] = None,
     ) -> "Rigid":
-        """Returns the corresponding reshaped rotation and reshaped translation.
+        """返回重塑后的旋转和平移。
 
-        Returns:
-            The reshaped transformation
+        返回:
+            重塑后的变换
         """
         new_rots = (
             self._rots.reshape(new_rots_shape=new_rots_shape) if new_rots_shape else self._rots
@@ -999,18 +914,18 @@ class Rigid:
         return Rigid(new_rots, new_trans)
 
     def get_rots(self) -> Rotation:
-        """Getter for the rotation.
+        """获取旋转对象。
 
-        Returns:
-            The rotation object
+        返回:
+            旋转对象
         """
         return self._rots
 
     def get_trans(self) -> COORDINATES_TENSOR_TYPE:
-        """Getter for the translation.
+        """获取平移。
 
-        Returns:
-            The stored translation
+        返回:
+            存储的平移
         """
         return self._trans
 
@@ -1019,17 +934,13 @@ class Rigid:
         q_update_vec: Float[torch.Tensor, "... num_nodes 6"],  # noqa: F722
         update_mask: Optional[UPDATE_NODE_MASK_TENSOR_TYPE] = None,
     ) -> "Rigid":
-        """Composes the transformation with a quaternion update vector of shape [*, 6], where the
-        final 6 columns represent the x, y, and z values of a quaternion of form (1, x, y, z)
-        followed by a 3D translation.
+        """用形状为[*, 6]的四元数更新向量复合变换。
 
-        Args:
-            q_update_vec:
-                The quaternion update vector.
-            update_mask:
-                An optional [*, 1] node mask indicating whether to update a node's geometry.
-        Returns:
-            The composed transformation.
+        参数:
+            q_update_vec: 四元数更新向量
+            update_mask: 可选掩码
+        返回:
+            复合变换
         """
         q_vec, t_vec = q_update_vec[..., :3], q_update_vec[..., 3:]
         new_rots = self._rots.compose_q_update_vec(q_vec, update_mask=update_mask)
@@ -1042,28 +953,25 @@ class Rigid:
         return Rigid(new_rots, new_translation)
 
     def compose(self, r: "Rigid") -> "Rigid":
-        """Composes the current rigid object with another.
+        """将当前刚体对象与另一个刚体对象复合。
 
-        Args:
-            r:
-                Another Rigid object
-        Returns:
-            The composition of the two transformations
+        参数:
+            r: 另一个Rigid对象
+        返回:
+            两个变换的复合
         """
         new_rot = self._rots.compose_r(r._rots)
         new_trans = self._rots.apply(r._trans) + self._trans
         return Rigid(new_rot, new_trans)
 
     def compose_r(self, rot: "Rigid", order: str = "right") -> "Rigid":
-        """Composes the current rigid object with another.
+        """将当前刚体对象与另一个刚体对象复合。
 
-        Args:
-            r:
-                Another Rigid object
-            order:
-                Order in which to perform rotation multiplication.
-        Returns:
-            The composition of the two transformations
+        参数:
+            r: 另一个Rigid对象
+            order: 旋转乘法顺序
+        返回:
+            两个变换的复合
         """
         if order == "right":
             new_rot = self._rots.compose_r(rot)
@@ -1074,32 +982,32 @@ class Rigid:
         return Rigid(new_rot, self._trans)
 
     def apply(self, pts: COORDINATES_TENSOR_TYPE) -> COORDINATES_TENSOR_TYPE:
-        """Applies the transformation to a coordinate tensor.
+        """将变换应用于坐标张量。
 
-        Args:
-            pts: A [*, 3] coordinate tensor.
-        Returns:
-            The transformed points.
+        参数:
+            pts: [*, 3] 坐标张量
+        返回:
+            变换后的点
         """
         rotated = self._rots.apply(pts)
         return rotated + self._trans
 
     def invert_apply(self, pts: COORDINATES_TENSOR_TYPE) -> COORDINATES_TENSOR_TYPE:
-        """Applies the inverse of the transformation to a coordinate tensor.
+        """将变换的逆应用于坐标张量。
 
-        Args:
-            pts: A [*, 3] coordinate tensor
-        Returns:
-            The transformed points.
+        参数:
+            pts: [*, 3] 坐标张量
+        返回:
+            变换后的点
         """
         pts = pts - self._trans
         return self._rots.invert_apply(pts)
 
     def invert(self) -> "Rigid":
-        """Inverts the transformation.
+        """求变换的逆。
 
-        Returns:
-            The inverse transformation.
+        返回:
+            逆变换
         """
         rot_inv = self._rots.invert()
         trn_inv = rot_inv.apply(self._trans)
@@ -1107,14 +1015,12 @@ class Rigid:
         return Rigid(rot_inv, -1 * trn_inv)
 
     def map_tensor_fn(self, fn: Callable) -> "Rigid":
-        """Apply a Tensor -> Tensor function to underlying translation and rotation tensors,
-        mapping over the translation/rotation dimensions respectively.
+        """对底层平移和旋转张量应用Tensor->Tensor函数，分别映射平移/旋转维度。
 
-        Args:
-            fn:
-                A Tensor -> Tensor function to be mapped over the Rigid
-        Returns:
-            The transformed Rigid object
+        参数:
+            fn: Tensor->Tensor函数
+        返回:
+            变换后的Rigid对象
         """
         new_rots = self._rots.map_tensor_fn(fn)
         new_trans = torch.stack(list(map(fn, torch.unbind(self._trans, dim=-1))), dim=-1)
@@ -1122,10 +1028,10 @@ class Rigid:
         return Rigid(new_rots, new_trans)
 
     def to_tensor_4x4(self) -> Float[torch.Tensor, "... num_nodes 4 4"]:  # noqa: F722
-        """Converts a transformation to a homogeneous transformation tensor.
+        """将变换转换为齐次变换张量。
 
-        Returns:
-            A [*, 4, 4] homogeneous transformation tensor
+        返回:
+            [*, 4, 4] 齐次变换张量
         """
         tensor = self._trans.new_zeros((*self.shape, 4, 4))
         tensor[..., :3, :3] = self._rots.get_rot_mats()
@@ -1135,12 +1041,12 @@ class Rigid:
 
     @staticmethod
     def from_tensor_4x4(t: Float[torch.Tensor, "... num_nodes 4 4"]) -> "Rigid":  # noqa: F722
-        """Constructs a transformation from a homogeneous transformation tensor.
+        """从齐次变换张量构造变换。
 
-        Args:
-            t: [*, 4, 4] homogeneous transformation tensor
-        Returns:
-            T object with shape [*]
+        参数:
+            t: [*, 4, 4] 齐次变换张量
+        返回:
+            形状为[*]的T对象
         """
         if t.shape[-2:] != (4, 4):
             raise ValueError("Incorrectly shaped input tensor")
@@ -1151,11 +1057,10 @@ class Rigid:
         return Rigid(rots, trans)
 
     def to_tensor_7(self) -> Float[torch.Tensor, "... num_nodes 7"]:  # noqa: F722
-        """Converts a transformation to a tensor with 7 final columns, four for the quaternion
-        followed by three for the translation.
+        """将变换转换为7列张量，前四列为四元数，后三列为平移。
 
-        Returns:
-            A [*, 7] tensor representation of the transformation
+        返回:
+            [*, 7] 变换张量
         """
         tensor = self._trans.new_zeros((*self.shape, 7))
         tensor[..., :4] = self._rots.get_quats()
@@ -1167,6 +1072,7 @@ class Rigid:
     def from_tensor_7(
         t: Float[torch.Tensor, "... num_nodes 7"], normalize_quats: bool = False  # noqa: F722
     ) -> "Rigid":
+        """从7列张量构造变换。"""
         if t.shape[-1] != 7:
             raise ValueError("Incorrectly shaped input tensor")
 
@@ -1183,16 +1089,15 @@ class Rigid:
         p_xy_plane: COORDINATES_TENSOR_TYPE,
         eps: float = 1e-8,
     ) -> "Rigid":
-        """Implements algorithm 21. Constructs transformations from sets of 3 points using the
-        Gram-Schmidt algorithm.
+        """实现算法21。用Gram-Schmidt算法从3个点构造变换。
 
-        Args:
-            p_neg_x_axis: [*, 3] coordinates
-            origin: [*, 3] coordinates used as frame origins
-            p_xy_plane: [*, 3] coordinates
-            eps: Small epsilon value
-        Returns:
-            A transformation object of shape [*]
+        参数:
+            p_neg_x_axis: [*, 3] 坐标
+            origin: [*, 3] 坐标，作为框架原点
+            p_xy_plane: [*, 3] 坐标
+            eps: 小的epsilon值
+        返回:
+            形状为[*]的变换对象
         """
         p_neg_x_axis = torch.unbind(p_neg_x_axis, dim=-1)
         origin = torch.unbind(origin, dim=-1)
@@ -1221,13 +1126,12 @@ class Rigid:
         return Rigid(rot_obj, torch.stack(origin, dim=-1))
 
     def unsqueeze(self, dim: int) -> "Rigid":
-        """Analogous to torch.unsqueeze. The dimension is relative to the shared dimensions of the
-        rotation/translation.
+        """类似torch.unsqueeze。维度相对于旋转/平移的共享维度。
 
-        Args:
-            dim: A positive or negative dimension index.
-        Returns:
-            The unsqueezed transformation.
+        参数:
+            dim: 维度索引
+        返回:
+            扩展后的变换
         """
         if dim >= len(self.shape):
             raise ValueError("Invalid dimension")
@@ -1238,16 +1142,13 @@ class Rigid:
 
     @staticmethod
     def cat(ts: List["Rigid"], dim: int) -> "Rigid":
-        """Concatenates transformations along a new dimension.
+        """沿新维度拼接变换。
 
-        Args:
-            ts:
-                A list of T objects
-            dim:
-                The dimension along which the transformations should be
-                concatenated
-        Returns:
-            A concatenated transformation object
+        参数:
+            ts: T对象列表
+            dim: 拼接维度
+        返回:
+            拼接后的变换对象
         """
         rots = Rotation.cat([t._rots for t in ts], dim)
         trans = torch.cat([t._trans for t in ts], dim=dim if dim >= 0 else dim - 1)
@@ -1255,23 +1156,122 @@ class Rigid:
         return Rigid(rots, trans)
 
     def apply_rot_fn(self, fn: Callable) -> "Rigid":
-        """Applies a Rotation -> Rotation function to the stored rotation object.
+        """对存储的旋转对象应用Rotation->Rotation函数。
 
-        Args:
-            fn: A function of type Rotation -> Rotation
-        Returns:
-            A transformation object with a transformed rotation.
+        参数:
+            fn: Rotation->Rotation函数
+        返回:
+            旋转变换后的对象
         """
         return Rigid(fn(self._rots), self._trans)
 
     def apply_trans_fn(self, fn: Callable) -> "Rigid":
-        """Applies a Tensor -> Tensor function to the stored translation.
+        """对存储的平移应用Tensor->Tensor函数。
 
-        Args:
-            fn:
-                A function of type Tensor -> Tensor to be applied to the
-                translation
-        Returns:
+        参数:
+            fn: Tensor->Tensor函数
+        返回:
+            平移变换后的对象
+        """
+        return Rigid(self._rots, fn(self._trans))
+
+    def scale_translation(self, trans_scale_factor: float) -> "Rigid":
+        """按常数因子缩放平移。
+
+        参数:
+            trans_scale_factor: 常数因子
+        返回:
+            平移缩放后的对象
+        """
+        return self.apply_trans_fn(lambda t: t * trans_scale_factor)
+
+    def stop_rot_gradient(self) -> "Rigid":
+        """分离底层旋转对象的梯度。
+
+        返回:
+            旋转已分离的对象
+        """
+        return self.apply_rot_fn(lambda r: r.detach())
+
+    @staticmethod
+    def make_transform_from_reference(
+        n_xyz: COORDINATES_TENSOR_TYPE,
+        ca_xyz: COORDINATES_TENSOR_TYPE,
+        c_xyz: COORDINATES_TENSOR_TYPE,
+        eps: float = 1e-20,
+    ) -> "Rigid":
+        """返回变换对象从参考坐标。
+
+        注意此方法不处理对称性。若原子顺序不标准，N原子不会在标准位置。
+        需自行处理此类情况。
+
+        参数:
+            n_xyz: [*, 3] 氮原子xyz坐标
+            ca_xyz: [*, 3] 碳α原子xyz坐标
+            c_xyz: [*, 3] 碳原子xyz坐标
+        返回:
+            变换对象。应用变换后，参考主链坐标将近似等于输入坐标。
+        """
+        translation = -1 * ca_xyz
+        n_xyz = n_xyz + translation
+        c_xyz = c_xyz + translation
+
+        c_x, c_y, c_z = (c_xyz[..., i] for i in range(3))
+        norm = torch.sqrt(eps + c_x**2 + c_y**2)
+        sin_c1 = -c_y / norm
+        cos_c1 = c_x / norm
+        zeros = sin_c1.new_zeros(sin_c1.shape)
+        ones = sin_c1.new_ones(sin_c1.shape)
+
+        c1_rots = sin_c1.new_zeros((*sin_c1.shape, 3, 3))
+        c1_rots[..., 0, 0] = cos_c1
+        c1_rots[..., 0, 1] = -1 * sin_c1
+        c1_rots[..., 1, 0] = sin_c1
+        c1_rots[..., 1, 1] = cos_c1
+        c1_rots[..., 2, 2] = 1
+
+        norm = torch.sqrt(eps + c_x**2 + c_y**2 + c_z**2)
+        sin_c2 = c_z / norm
+        cos_c2 = torch.sqrt(c_x**2 + c_y**2) / norm
+
+        c2_rots = sin_c2.new_zeros((*sin_c2.shape, 3, 3))
+        c2_rots[..., 0, 0] = cos_c2
+        c2_rots[..., 0, 2] = sin_c2
+        c2_rots[..., 1, 1] = 1
+        c1_rots[..., 2, 0] = -1 * sin_c2
+        c1_rots[..., 2, 2] = cos_c2
+
+        c_rots = rot_matmul(c2_rots, c1_rots)
+        n_xyz = rot_vec_mul(c_rots, n_xyz)
+
+        _, n_y, n_z = (n_xyz[..., i] for i in range(3))
+        norm = torch.sqrt(eps + n_y**2 + n_z**2)
+        sin_n = -n_z / norm
+        cos_n = n_y / norm
+
+        n_rots = sin_c2.new_zeros((*sin_c2.shape, 3, 3))
+        n_rots[..., 0, 0] = 1
+        n_rots[..., 1, 1] = cos_n
+        n_rots[..., 1, 2] = -1 * sin_n
+        n_rots[..., 2, 1] = sin_n
+        n_rots[..., 2, 2] = cos_n
+
+        rots = rot_matmul(n_rots, c_rots)
+
+        rots = rots.transpose(-1, -2)
+        translation = -1 * translation
+
+        rot_obj = Rotation(rot_mats=rots, quats=None)
+
+        return Rigid(rot_obj, translation)
+
+    def cuda(self) -> "Rigid":
+        """将变换对象移动到GPU内存。
+
+        返回:
+            GPU上的变换对象
+        """
+        return Rigid(self._rots.cuda(), self._trans.cuda())
             A transformation object with a transformed translation.
         """
         return Rigid(self._rots, fn(self._trans))

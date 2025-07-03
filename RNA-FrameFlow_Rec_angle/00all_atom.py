@@ -1,7 +1,7 @@
 """
-Utilities for calculating all atom representations.
+用于计算全原子表示的工具函数。
 
-Code adapted from
+代码改编自
 - https://github.com/jasonkyuyim/se3_diffusion/blob/master/data/all_atom.py
 - https://github.com/Profluent-Internships/MMDiff/blob/main/src/data/components/pdb/all_atom.py
 """
@@ -36,20 +36,20 @@ NA_RESIDUE_ATOM23_MASK = torch.tensor(nttype_compact_atom_mask)
 NA_RESIDUE_GROUP_IDX = torch.tensor(nttype_compact_atom_to_rigid_group)
 
 def create_rna_rigid(rots, trans):
-    # takes in separate rotations and translations and returns a unified rigid_utils.Rigid(...) object
+    # 输入分开的旋转和平移，返回统一的 rigid_utils.Rigid(...) 对象
     rots = Rotation(rot_mats=rots)
     return Rigid(rots=rots, trans=trans)
 
 def to_atom37_rna(trans, rots, is_na_residue_mask, torsions=None):
     """
-    Params:
-        trans (tensor) : tensor representing translations
-        rots (tensor) : tensor representing rotations
-        is_na_residue_mask (tensor) : one-hot nucleotide mask
-        torsions (tensor) : predicted/ground truth torsion angles to impute non-frame backbone atoms
+    参数:
+        trans (tensor): 表示平移的张量
+        rots (tensor): 表示旋转的张量
+        is_na_residue_mask (tensor): 单热核苷酸掩码
+        torsions (tensor): 预测/真实的扭转角，用于补全非框架骨架原子
 
-    Remarks:
-        Takes RNA rots+trans (ie, a RNA frame) and converts it to the sparse ATOM37 representation
+    说明:
+        将RNA的旋转+平移（即RNA框架）转换为稀疏的ATOM37表示
     """
 
     final_atom37 = compute_backbone(
@@ -67,14 +67,14 @@ def to_atom37_rna(trans, rots, is_na_residue_mask, torsions=None):
 def transrot_to_atom37_rna(transrot_traj, is_na_residue_mask, torsions):
     """
     将刚体变换轨迹转换为ATOM37格式的RNA全原子结构
-    
-    Args:
+
+    参数:
         transrot_traj (list): 刚体变换轨迹列表，包含N_T个流匹配时间步的演化刚体变换
-                            每个元素是(trans, rots)元组，表示平移和旋转
+                              每个元素是(trans, rots)元组，表示平移和旋转
         is_na_residue_mask (tensor): 核苷酸掩码，标记哪些位置是RNA残基
         torsions (tensor): 从AngleResNet预测的扭转角，形状为16（NUM_NA_TORSIONS * 2）
-    
-    Returns:
+
+    返回:
         atom37_traj (list): 全原子骨架轨迹列表，包含所有非框架原子根据预测扭转角放置的坐标
     """
     # 初始化ATOM37轨迹列表
@@ -112,14 +112,14 @@ def transrot_to_atom37_rna(transrot_traj, is_na_residue_mask, torsions):
 def transrot_to_atom23_rna(transrot_traj, is_na_residue_mask, torsions):
     """
     将刚体变换轨迹转换为ATOM23格式的RNA全原子结构
-    
-    Args:
+
+    参数:
         transrot_traj (list): 刚体变换轨迹列表，包含N_T个流匹配时间步的演化刚体变换
-                            每个元素是(trans, rots)元组，表示平移和旋转
+                              每个元素是(trans, rots)元组，表示平移和旋转
         is_na_residue_mask (tensor): 核苷酸掩码，标记哪些位置是RNA残基
         torsions (tensor): 从AngleResNet预测的扭转角，形状为16（NUM_NA_TORSIONS * 2）
-    
-    Returns:
+
+    返回:
         atom23_traj (list): 全原子骨架轨迹列表，包含所有非框架原子根据预测扭转角放置的坐标
     """
     # 初始化ATOM23轨迹列表
@@ -154,18 +154,18 @@ def transrot_to_atom23_rna(transrot_traj, is_na_residue_mask, torsions):
 def of_na_torsion_angles_to_frames(r, alpha, aatype, rrgdf):
     """
     将RNA扭转角转换为刚体框架
-    
-    Params:
-        r (tensor) : 表示RNA框架的rigid_utils.Rigid(...)对象张量
-        alpha (tensor) : 从AngleResNet预测的扭转角
-        aatype (tensor) : 残基类型张量 [忽略]
-        rrgdf (tensor) : 默认的RNA残基刚体组框架张量
 
-    Remarks:
+    参数:
+        r (tensor): 表示RNA框架的rigid_utils.Rigid(...)对象张量
+        alpha (tensor): 从AngleResNet预测的扭转角
+        aatype (tensor): 残基类型张量 [忽略]
+        rrgdf (tensor): 默认的RNA残基刚体组框架张量
+
+    说明:
         使用预测的RNA框架`r`和提供的扭转角`alpha`
         将非框架骨架原子插值到ATOM37表示中。
-    
-    Returns:
+
+    返回:
         包含所有13个RNA骨架原子的ATOM37格式的torch张量。
     """
     # 获取默认的4x4变换矩阵 [*, N, 11, 4, 4]
@@ -273,15 +273,15 @@ def of_na_torsion_angles_to_frames(r, alpha, aatype, rrgdf):
 def na_frames_to_atom23_pos(r, aatype):
     """
     将核酸（NA）框架转换为理想化的全原子表示
-    
-    Params:
+
+    参数:
         r: 所有刚体组框架 [..., N, 11, 3]
         aatype: 残基类型 [..., N]
 
-    Remarks:
+    说明:
         将核酸（NA）框架转换为其理想化的全原子表示
 
-    Returns:
+    返回:
         以ATOM37格式存储的理想化全原子骨架的torch张量
     """
 
@@ -332,17 +332,17 @@ def na_frames_to_atom23_pos(r, aatype):
 def compute_backbone(bb_rigids, torsions, is_na_residue_mask, aatype=None):
     """
     计算RNA全原子骨架结构
-    
-    Params:
-        bb_rigids (tensor) : 包含旋转和平移的刚体变换张量
-        torsions : 从AngleResNet预测的扭转角
-        is_na_residue_mask (tensor) : 核苷酸掩码，标记哪些位置是RNA残基
-        aatype (tensor) : 残基类型张量 [可选]
 
-    Remarks:
+    参数:
+        bb_rigids (tensor): 包含旋转和平移的刚体变换张量
+        torsions: 从AngleResNet预测的扭转角
+        is_na_residue_mask (tensor): 核苷酸掩码，标记哪些位置是RNA残基
+        aatype (tensor): 残基类型张量 [可选]
+
+    说明:
         此方法接收刚体变换对象并将其转换为全原子RNA骨架结构
 
-    Returns:
+    返回:
         包含框架原子和根据扭转角插值的非框架原子的全原子RNA骨架
         以ATOM37格式存储为torch张量
     """
